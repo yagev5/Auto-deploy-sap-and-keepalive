@@ -6,6 +6,9 @@ let password = "你的sap登录密码";   // SAP登录密码,直接填写或设�
 let CHAT_ID = "";    // Telegram聊天CHAT_ID,直接填写或设置环境变量，变量名：CHAT_ID
 let BOT_TOKEN = "";  // Telegram机器人TOKEN,直接填写或设置环境变量，变量名：BOT_TOKEN
 
+// Bark 推送配置(可选)
+let BARK_URL = "";   // Bark 推送完整 URL，例：
+
 // 应用配置 URL和应用名称配置(必填)
 const MONITORED_APPS = [ // 格式: {url: "应用URL", name: "应用名称"}
   {url: "https://xxxxx.cfapps.ap21.hana.ondemand.com", name: "xxxxx"},  
@@ -34,38 +37,61 @@ const json = (o, c = 200) => new Response(JSON.stringify(o), {
   headers: { "content-type": "application/json" }
 });
 
+// Bark 消息发送
+async function sendBarkMessage(title, content) {
+  // 如果没有配置 Bark URL, 跳过
+  if (!BARK_URL || BARK_URL === "https://bark.yagev5.pp.ua/你的key/") {
+    console.log("[bark] 未配置BARK_URL，跳过推送");
+    return;
+  }
+  try {
+    // Bark API: GET https://bark.url/KEY/标题/内容
+    const url = `${BARK_URL}${encodeURIComponent(title)}/${encodeURIComponent(content)}`;
+    const response = await fetch(url, { method: "GET" });
+    if (!response.ok) {
+      console.error(`[bark-error] 推送失败: ${response.status}`);
+    } else {
+      console.log("[bark] 推送成功");
+    }
+  } catch (error) {
+    console.error(`[bark-error] 推送出错: ${error.message}`);
+  }
+}
+
 // Telegram 消息发送
 async function sendTelegramMessage(message) {
   // 如果没有配置 Telegram 参数，则忽略
   if (!CHAT_ID || !BOT_TOKEN || CHAT_ID === "your-chat-id" || BOT_TOKEN === "your-telegram-bot-token") {
     console.log("[telegram] Telegram 未配置，跳过发送消息");
-    return;
-  }
+  } else {
+    try {
+      const telegramUrl = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+      const response = await fetch(telegramUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          chat_id: CHAT_ID,
+          text: message,
+          parse_mode: "Markdown"
+        })
+      });
 
-  try {
-    const telegramUrl = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
-    const response = await fetch(telegramUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        chat_id: CHAT_ID,
-        text: message,
-        parse_mode: "Markdown"
-      })
-    });
-
-    const result = await response.json();
-    if (!response.ok) {
-      console.error(`[telegram-error] 发送消息失败: ${result.description}`);
-    } else {
-      console.log("[telegram] 消息发送成功");
+      const result = await response.json();
+      if (!response.ok) {
+        console.error(`[telegram-error] 发送消息失败: ${result.description}`);
+      } else {
+        console.log("[telegram] 消息发送成功");
+      }
+    } catch (error) {
+      console.error(`[telegram-error] 发送消息时出错: ${error.message}`);
     }
-    return result;
-  } catch (error) {
-    console.error(`[telegram-error] 发送消息时出错: ${error.message}`);
   }
+
+  // 同步Bark推送（只推送纯文本）
+  const barkTitle = "SAP应用通知";
+  await sendBarkMessage(barkTitle, message.replace(/\*/g, "")); // 去掉 Markdown 格式符号
 }
 
 // 转换成上海时间
@@ -284,7 +310,6 @@ function generateStatusPage(apps) {
       --border-radius: 8px;
       --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
-    
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       margin: 0;
@@ -292,14 +317,12 @@ function generateStatusPage(apps) {
       background-color: var(--bg-color);
       color: var(--text-color);
     }
-    
     .container {
       max-width: 1200px;
       margin: 0 auto;
       padding: 20px;
-      text-align: center; /* 添加居中对齐 */
+      text-align: center;
     }
-    
     header {
       text-align: center;
       padding: 30px 0;
@@ -309,41 +332,35 @@ function generateStatusPage(apps) {
       margin-bottom: 30px;
       box-shadow: var(--box-shadow);
     }
-    
     h1 {
       margin: 0;
       font-size: 2.5rem;
     }
-    
     .subtitle {
       font-size: 1.2rem;
       opacity: 0.9;
       margin-top: 10px;
     }
-    
     .status-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
       gap: 20px;
-      margin: 0 auto; /* 居中网格容器 */
-      max-width: 800px; /* 设置最大宽度 */
+      margin: 0 auto;
+      max-width: 800px;
       width: 100%;
     }
-    
     .status-card {
       background: var(--card-bg);
       border-radius: var(--border-radius);
       box-shadow: var(--box-shadow);
       overflow: hidden;
       transition: transform 0.3s ease, box-shadow 0.3s ease;
-      margin: 0 auto; /* 居中卡片 */
+      margin: 0 auto;
     }
-    
     .status-card:hover {
       transform: translateY(-5px);
       box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
     }
-    
     .card-header {
       padding: 20px;
       display: flex;
@@ -351,58 +368,47 @@ function generateStatusPage(apps) {
       align-items: center;
       border-bottom: 1px solid #eee;
     }
-    
     .card-header h3 {
       margin: 0;
       font-size: 1.5rem;
     }
-    
     .status-indicator {
       padding: 5px 15px;
       border-radius: 20px;
       font-weight: bold;
       font-size: 0.9rem;
     }
-    
     .status-up {
       background-color: rgba(76, 175, 80, 0.1);
       color: var(--up-color);
     }
-    
     .status-down {
       background-color: rgba(244, 67, 54, 0.1);
       color: var(--down-color);
     }
-    
     .card-body {
       padding: 20px;
     }
-    
     .card-body p {
       margin: 10px 0;
     }
-    
     .card-body a {
       color: #1976D2;
       text-decoration: none;
     }
-    
     .card-body a:hover {
       text-decoration: underline;
     }
-    
     .last-updated {
       text-align: center;
       color: #666;
       font-size: 0.9rem;
       margin-top: 20px;
     }
-    
     .controls {
       text-align: center;
       margin: 30px 0;
     }
-    
     .btn {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
@@ -413,11 +419,9 @@ function generateStatusPage(apps) {
       cursor: pointer;
       transition: opacity 0.3s ease;
     }
-    
     .btn:hover {
-      opacity: 0rais
+      opacity: 0.8;
     }
-    
     footer {
       text-align: center;
       padding: 20px;
@@ -426,28 +430,23 @@ function generateStatusPage(apps) {
       border-top: 1px solid #eee;
       margin-top: 30px;
     }
-    
     .footer-links {
       font-weight: 700;
       font-size: larger;
       margin-top: 10px;
     }
-    
     .footer-links a {
       color: #1976D2;
       text-decoration: none;
       margin: 0 10px;
     }
-    
     .footer-links a:hover {
       text-decoration: underline;
     }
-    
     @media (max-width: 768px) {
       .status-grid {
         grid-template-columns: 1fr;
       }
-      
       h1 {
         font-size: 2rem;
       }
@@ -460,19 +459,15 @@ function generateStatusPage(apps) {
       <h1>SAP Cloud 应用监控</h1>
       <div class="subtitle">实时监控应用状态，确保服务持续可用</div>
     </header>
-    
     <div class="controls">
       <button class="btn" onclick="refreshStatus()">刷新状态</button>
     </div>
-    
     <div class="status-grid">
       ${statusCards}
     </div>
-    
     <div class="last-updated">
       最后更新: ${formattedDate}
     </div>
-    
     <footer>
       <p>SAP Cloud 多应用自动保活系统</p>
       <div class="footer-links">
@@ -483,7 +478,6 @@ function generateStatusPage(apps) {
       <p>&copy; ${new Date().getFullYear()} Auto-SAP. All rights reserved.</p>
     </footer>
   </div>
-  
   <script>
     function refreshStatus() {
       location.reload();
@@ -560,7 +554,6 @@ async function ensureAppRunning(appConfig, reason = "unknown") {
     await sendTelegramMessage(successMessage);
     return {app: name, status: "started", url: url};
   } else {
-    // console.log("[warning] 应用启动完成但URL状态仍异常，可能需要更多时间");
     // 发送重启失败提醒
     const failedMessage = `❌ *SAP应用重启失败*\n\n应用名称: ${name}\n应用URL: ${url}\n时间: ${formatShanghaiTime(new Date())}`;
     await sendTelegramMessage(failedMessage);
@@ -593,15 +586,11 @@ export default {
   // HTTP 请求处理
   async fetch(request, env, ctx) {
     // 从环境变量获取邮箱和密码
-      email = env.EMAIL || email;
-      password = env.PASSWORD || password;
-      CHAT_ID = env.CHAT_ID || CHAT_ID;
-      BOT_TOKEN = env.BOT_TOKEN || BOT_TOKEN;
-    
-    // console.log(`[config] 使用邮箱: ${email}`);
-    // console.log(`[config] 使用密码: ${password ? "已设置" : "未设置"}`);
-    // console.log(`[config] 使用CHAT_ID: ${CHAT_ID ? "已设置" : "未设置"}`);
-    // console.log(`[config] 使用BOT_TOKEN: ${BOT_TOKEN ? "已设置" : "未设置"}`);
+    email = env.EMAIL || email;
+    password = env.PASSWORD || password;
+    CHAT_ID = env.CHAT_ID || CHAT_ID;
+    BOT_TOKEN = env.BOT_TOKEN || BOT_TOKEN;
+    BARK_URL = env.BARK_URL || BARK_URL;
     
     const url = new URL(request.url);
     
@@ -682,12 +671,8 @@ export default {
       password = env.PASSWORD || password;
       CHAT_ID = env.CHAT_ID || CHAT_ID;
       BOT_TOKEN = env.BOT_TOKEN || BOT_TOKEN;
+      BARK_URL = env.BARK_URL || BARK_URL;
       
-      // console.log(`[cron] 定时任务触发: ${event.cron} at ${new Date(event.scheduledTime).toISOString()}`);
-      // console.log(`[config] 使用邮箱: ${email}`);
-      // console.log(`[config] 使用密码: ${password ? "已设置" : "未设置"}`);
-      
-      // 使用ctx.waitUntil确保定时任务完成
       ctx.waitUntil(monitorAllApps("cron").then(results => {
         console.log("定时任务结果:", results);
       }));
